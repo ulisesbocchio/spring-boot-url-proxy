@@ -1,5 +1,7 @@
 package com.disney.studios.tech.proxy.github;
 
+import com.github.ulisesbocchio.spring.boot.proxy.GithubProxyApplication;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.SpringApplicationConfiguration;

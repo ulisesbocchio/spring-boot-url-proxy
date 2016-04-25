@@ -1,4 +1,4 @@
-package com.disney.studios.tech.proxy.github;
+package com.github.ulisesbocchio.spring.boot.proxy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
