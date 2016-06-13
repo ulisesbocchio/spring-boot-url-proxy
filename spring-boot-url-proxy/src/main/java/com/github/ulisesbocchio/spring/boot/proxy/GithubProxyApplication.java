@@ -14,10 +14,13 @@ import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.methods.RequestBuilder;
 import org.apache.http.conn.HttpClientConnectionManager;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.ssl.SSLContexts;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -37,8 +40,10 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.Collections;
 
+import javax.net.ssl.SSLContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -93,22 +98,26 @@ public class GithubProxyApplication {
                         .filter(name -> !name.equalsIgnoreCase(HttpHeaders.CONTENT_LENGTH))
                         .forEach(header -> requestBuilder.setHeader(header, List.ofAll(Collections.list(req.getHeaders(header))).mkString(",")));
                     requestBuilder.setHeader("X-Forwarded-For", req.getRemoteAddr());
-                    if(req.getCharacterEncoding() != null) {
+                    requestBuilder.setHeader("Referer", req.getRemoteHost());
+                    requestBuilder.setHeader("Host", getHost(url));
+                    if (req.getCharacterEncoding() != null) {
                         requestBuilder.setCharset(Charset.forName(req.getCharacterEncoding()));
                     }
                     requestBuilder.setUri(url);
                     requestBuilder.setEntity(new InputStreamEntity(req.getInputStream()));
                     HttpUriRequest proxyRequest = requestBuilder.build();
+                    log.info("proxying request: {}. Headers: {}", proxyRequest, Arrays.asList(proxyRequest.getAllHeaders()));
                     HttpResponse proxyResponse = httpClient.execute(proxyRequest);
+                    log.info("proxy response: {}. Headers: {}", proxyResponse, Arrays.asList(proxyResponse.getAllHeaders()));
                     req.getInputStream().close();
                     res.setStatus(proxyResponse.getStatusLine().getStatusCode());
                     res.setHeader("Proxied-By", "Spring Proxy");
-                    if(proxyResponse.getEntity() != null) {
-                        if(proxyResponse.getEntity().getContentEncoding() != null) {
+                    if (proxyResponse.getEntity() != null) {
+                        if (proxyResponse.getEntity().getContentEncoding() != null) {
                             res.setCharacterEncoding(proxyResponse.getEntity().getContentEncoding().getValue());
                         }
                         Stream.of(proxyResponse.getAllHeaders()).forEach(h -> res.setHeader(h.getName(), h.getValue()));
-                        try(OutputStream out = res.getOutputStream()) {
+                        try (OutputStream out = res.getOutputStream()) {
                             proxyResponse.getEntity().writeTo(out);
                             out.flush();
                         }
@@ -119,6 +128,10 @@ public class GithubProxyApplication {
                     log.error("Error caught:", t);
                     error(req, res, HttpStatus.INTERNAL_SERVER_ERROR, exceptionMessage(t));
                 }
+            }
+
+            private String getHost(String url) {
+                return Try.of(() -> new URL(url)).get().getHost();
             }
 
             private boolean isURL(String url) {
@@ -165,7 +178,7 @@ public class GithubProxyApplication {
             return ResponseEntity.ok().header("SILLY", "Silly").build();
         }
 
-        @RequestMapping(method = RequestMethod.POST)
+        @RequestMapping(method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
         public ResponseEntity<String> post(@RequestBody String body) {
             return ResponseEntity.ok().header("SILLY", "Silly").body(body);
         }
@@ -190,7 +203,23 @@ public class GithubProxyApplication {
         return HttpClients.custom()
             .setConnectionManager(connectionManager())
             .setDefaultRequestConfig(requestConfig())
+            .setSSLSocketFactory(sslConFactory())
             .build();
+    }
+
+    @Bean
+    @SneakyThrows
+    public SSLConnectionSocketFactory sslConFactory() {
+        SSLContext sslcontext = SSLContexts.custom()
+            .loadTrustMaterial(new TrustSelfSignedStrategy())
+            .build();
+
+        SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
+            sslcontext,
+            new String[]{"SSLv2"},
+            null,
+            SSLConnectionSocketFactory.getDefaultHostnameVerifier());
+        return sslsf;
     }
 
     @Bean

@@ -1,0 +1,8 @@
+applications:
+- name: ub-url-proxy
+  memory: 512M
+  instances: 1
+  host: ub-url-proxy
+  path: ./target/spring-boot-url-proxy-0.0.1-SNAPSHOT.jar
+  env:
+      JAVA_OPTS: -Djava.security.egd=file:///dev/urandom

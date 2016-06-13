@@ -21,6 +21,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<java.version>1.8</java.version>
+		<main-class>com.github.ulisesbocchio.spring.boot.proxy.GithubProxyApplication</main-class>
 	</properties>
 
 	<dependencies>
